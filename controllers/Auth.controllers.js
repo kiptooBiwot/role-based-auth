@@ -13,8 +13,8 @@ module.exports.registerUser = async (req, res, next) => {
     const result = await authSchema.validateAsync(req.body);
 
     // Does the user exist?
-    const user = await User.findOne({ email: result.email });
-    if (user)
+    const dbUser = await User.findOne({ email: result.email });
+    if (dbUser)
       throw createError.Conflict(
         `${result.email} is already taken. Try another email`
       );
@@ -26,10 +26,13 @@ module.exports.registerUser = async (req, res, next) => {
       ...result,
     });
 
-    const savedUser = await newUser.save();
+    const user = await newUser.save();
 
-    const accessToken = await signAccessToken(savedUser._id);
-    const refreshToken = await signRefreshToken(savedUser._id)
+    const accessToken = await signAccessToken(user);
+    const refreshToken = await signRefreshToken(user)
+
+    console.log("Access Token: ", accessToken)
+    console.log("Refresh Token: ", refreshToken)
 
     res.send({ accessToken, refreshToken });
   } catch (error) {
@@ -54,10 +57,10 @@ module.exports.loginUser = async (req, res, next) => {
     if (!isMatch) throw createError.Unauthorized('Invalid login credentials - pass')
 
     // generate token
-    const accessToken = await signAccessToken(user.id)
-    const refreshToken = await signRefreshToken(user.id)
+    const accessToken = await signAccessToken(user)
+    const refreshToken = await signRefreshToken(user)
 
-    res.send({
+    res.header('x-access-token', accessToken).send({
       token: `Bearer ${accessToken}`,
       refreshToken: `Bearer ${refreshToken}`
     })

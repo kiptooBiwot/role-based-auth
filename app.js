@@ -4,7 +4,7 @@ const createError = require("http-errors");
 require("dotenv").config();
 require('./helpers/mongodb.init')
 require('./helpers/redis.init')
-const { verifyAccessToken } = require('./helpers/jwt_helper')
+const { verifyAccessToken, isAdmin, isSuperAdmin, isUser } = require('./helpers/jwt_helper')
 // Routes
 const authRoute = require('./routes/Auth.routes')
 
@@ -17,8 +17,8 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(morgan('dev'))
 
-app.get('/', verifyAccessToken, (req, res, next) => {
-  // console.log(req.headers['authorization'])
+app.get('/', verifyAccessToken, isAdmin, (req, res, next) => {
+  console.log(req.user)
   res.send('This is the first route to be protected! Let\'s go!')
 })
 app.use('/api/employee', authRoute)

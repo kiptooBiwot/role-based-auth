@@ -3,14 +3,15 @@ const createError = require("http-errors");
 const client = require("./redis.init");
 
 module.exports = {
-  signAccessToken: (userId) => {
+  signAccessToken: (user) => {
     return new Promise((resolve, reject) => {
-      (payload = { name: "Some Name" }),
+      (payload = {
+        id: user.id,
+        role: user.role,
+      }),
         (secret = process.env.ACCESS_TOKEN_SECRET);
       options = {
-        expiresIn: "30s",
-        issuer: "iamkipb@aol.com",
-        audience: userId,
+        expiresIn: "1m",
       };
       jwt.sign(payload, secret, options, (err, token) => {
         if (err) {
@@ -27,25 +28,27 @@ module.exports = {
     const authHeader = req.headers["authorization"];
     const token = authHeader.split(" ")[1];
 
-    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, payload) => {
-      if (err) {
-        const message =
-          err.name === "JsonWebTokenError" ? "Unauthorized" : err.message;
-        return next(createError.Unauthorized(message));
-      }
-
-      req.payload = payload;
+    try {
+      const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+      req.user = decoded;
       next();
-    });
+    } catch (err) {
+      if (err.name === "JsonwebTokenError") {
+        createError.Unauthorized()
+      } else {
+        next(createError.Unauthorized(err.message))
+      }
+    }
   },
-  signRefreshToken: (userId) => {
+  signRefreshToken: (user) => {
     return new Promise((resolve, reject) => {
-      (payload = { name: "Some Name" }),
+      (payload = {
+        id: user.id,
+        role: user.role,
+      }),
         (secret = process.env.REFRESH_TOKEN_SECRET);
       options = {
         expiresIn: "1y",
-        issuer: "iamkipb@aol.com",
-        audience: userId,
       };
       jwt.sign(payload, secret, options, (err, token) => {
         if (err) {
@@ -54,7 +57,7 @@ module.exports = {
         }
 
         // Store the refresh token in Redis server
-        client.SET(userId, token, "EX", 365 * 24 * 60 * 60, (err, reply) => {
+        client.SET(user.id, token, "EX", 365 * 24 * 60 * 60, (err, reply) => {
           if (err) {
             console.log(err);
             reject(createError.InternalServerError());
@@ -77,21 +80,40 @@ module.exports = {
           // Check the token from Redis server if it exists
           client.GET(userId, (err, reply) => {
             if (err) {
-              console.log(err)
-              reject(createError.InternalServerError())
-              return
+              console.log(err);
+              reject(createError.InternalServerError());
+              return;
             }
             // Check if the refreshToken matches the redis-stored token
-            if (refreshToken === reply) return resolve(userId)
+            if (refreshToken === reply) return resolve(userId);
             // If tokens did not match
-            reject(createError.Unauthorized())
-            
-
-          })
+            reject(createError.Unauthorized());
+          });
 
           resolve(userId);
         }
       );
     });
+  },
+  isAdmin: (req, res, next) => {
+    if (req.user.role === 'admin') {
+      next()
+    } else {
+      next(createError.Unauthorized('This route is above your grade level!'))
+    }
+  },
+  isUser: (req, res, next) => {
+    if (req.user.role === 'user') {
+      next()
+    } else {
+      next(createError.Unauthorized('This route is above your grade level!'))
+    }
+  },
+  isSuperAdmin: (req, res, next) => {
+    if (req.user.role === 'superadmin') {
+      next()
+    } else {
+      next(createError.Unauthorized('This route is above your grade level!'))
+    }
   },
 };
